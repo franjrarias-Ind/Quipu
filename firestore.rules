@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health / connection test
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // Claustros synced state
+    match /claustros/{categoria} {
+      allow read: if true;
+      allow write: if categoria in ['docente', 'docente_fobam', 'estudiante', 'tae', 'graduado', 'orquesta'];
+    }
+  }
+}

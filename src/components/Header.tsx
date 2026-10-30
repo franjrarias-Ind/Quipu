@@ -8,7 +8,7 @@ import { useElection } from '../context/ElectionContext';
 import { Vote, Sparkles, RotateCcw, Download, CheckCircle2 } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { resumen, simularVotacion, reiniciarVotacion, votantes } = useElection();
+  const { resumen, simularVotacion, reiniciarVotacion, votantes, cloudSyncStatus } = useElection();
   const [copied, setCopied] = useState(false);
 
   const exportarCSV = () => {
@@ -52,6 +52,33 @@ export const Header: React.FC = () => {
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 Ponderación Estatutaria
               </span>
+              <div
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${
+                  cloudSyncStatus === 'guardando'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : cloudSyncStatus === 'conectado'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+                title="Sincronización multiusuario en tiempo real con Firebase Firestore"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    cloudSyncStatus === 'guardando'
+                      ? 'bg-amber-400 animate-ping'
+                      : cloudSyncStatus === 'conectado'
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-slate-500'
+                  }`}
+                />
+                <span>
+                  {cloudSyncStatus === 'guardando'
+                    ? 'Sincronizando...'
+                    : cloudSyncStatus === 'conectado'
+                    ? 'En vivo (10 usuarios)'
+                    : 'Modo local'}
+                </span>
+              </div>
             </div>
             <p className="text-xs text-slate-400">
               Docentes 35% · Estudiantes 35% · TAE 15% · Graduados 15%

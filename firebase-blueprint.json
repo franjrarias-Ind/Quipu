@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "ClaustroState": {
+      "title": "ClaustroState",
+      "description": "Estado y padrón de votantes sincronizado en tiempo real por claustro",
+      "type": "object",
+      "properties": {
+        "categoria": {
+          "type": "string",
+          "enum": ["docente", "docente_fobam", "estudiante", "tae", "graduado", "orquesta"]
+        },
+        "votantes": {
+          "type": "array",
+          "description": "Listado de votantes del claustro con estado de sufragio y postura"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["categoria", "votantes"]
+    }
+  },
+  "firestore": {
+    "/claustros/{categoria}": {
+      "schema": "ClaustroState",
+      "description": "Sincronización en tiempo real de cada padrón por claustro"
+    }
+  }
+}

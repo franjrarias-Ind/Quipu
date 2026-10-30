@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { initializeApp } from "https://gstatic.com";
-import { getDatabase, ref, set, onValue } from "https://gstatic.com";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ClaustroCategoria,
   Postura,
@@ -21,14 +19,8 @@ import {
   PADRON_GRADUADOS,
   PADRON_ORQUESTAS
 } from '../data/padronesData';
-
-// Configuración de Firebase - Utiliza la URL de Vercel
-const firebaseConfig = {
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || "TU_URL_DE_FIREBASE_AQUI"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+import { db } from '../firebase';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface ElectionContextType {
   votantes: Votante[];
@@ -42,7 +34,10 @@ interface ElectionContextType {
   simularVotacion: () => void;
   reiniciarVotacion: () => void;
   reiniciarTodo: () => void;
+  cloudSyncStatus: 'conectado' | 'guardando' | 'offline';
 }
+
+const STORAGE_KEY = 'esmn_boca_urna_ponderada_v10';
 
 export function normalizePostura(raw: any): Postura {
   if (typeof raw !== 'string') return 'Indecisos';
@@ -52,6 +47,7 @@ export function normalizePostura(raw: any): Postura {
   return 'Indecisos';
 }
 
+// Statutory weights (35% Docentes, 35% Estudiantes, 15% TAE, 15% Graduados)
 const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
   docente: 0.35,
   docente_fobam: 0,
@@ -61,8 +57,28 @@ const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
   orquesta: 0,
 };
 
+const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
+  docente: 'Docentes',
+  docente_fobam: 'Docentes FoBaM',
+  estudiante: 'Estudiantes',
+  tae: 'Personal TAE',
+  graduado: 'Graduados',
+  orquesta: 'Orquestas',
+};
+
+const ALL_CATEGORIAS: ClaustroCategoria[] = [
+  'docente',
+  'docente_fobam',
+  'estudiante',
+  'tae',
+  'graduado',
+  'orquesta',
+];
+
 function generateInitialVotantes(): Votante[] {
   const all: Votante[] = [];
+
+  // Realistic seed distribution
   const getInitialPostura = (index: number, cat: ClaustroCategoria): Postura => {
     const mod = (index * 11 + (cat === 'docente' ? 3 : cat === 'docente_fobam' ? 7 : cat === 'tae' ? 1 : 5)) % 100;
     if (mod < 48) return 'Quipu';
@@ -70,23 +86,88 @@ function generateInitialVotantes(): Votante[] {
     return 'Copla';
   };
 
+  // 1. Docentes (284)
   PADRON_DOCENTES.forEach((d, idx) => {
-    all.push({ id: `doc-${d.id}`, nro: d.id, categoria: 'docente', nombre: d.nombre, dni: d.dni, nroEmpl: d.nroEmpl, postura: getInitialPostura(idx, 'docente'), yaVoto: false });
+    all.push({
+      id: `doc-${d.id}`,
+      nro: d.id,
+      categoria: 'docente',
+      nombre: d.nombre,
+      dni: d.dni,
+      nroEmpl: d.nroEmpl,
+      postura: getInitialPostura(idx, 'docente'),
+      yaVoto: false,
+    });
   });
+
+  // 2. Docentes FoBaM (238)
   PADRON_DOCENTES_FOBAM.forEach((f, idx) => {
-    all.push({ id: `fobam-${f.id}`, nro: f.id, categoria: 'docente_fobam', subclaustro: f.subclaustro, nombre: f.nombre, dni: f.dni, postura: getInitialPostura(idx, 'docente_fobam'), yaVoto: false });
+    all.push({
+      id: `fobam-${f.id}`,
+      nro: f.id,
+      categoria: 'docente_fobam',
+      subclaustro: f.subclaustro,
+      nombre: f.nombre,
+      dni: f.dni,
+      postura: getInitialPostura(idx, 'docente_fobam'),
+      yaVoto: false,
+    });
   });
+
+  // 3. Estudiantes (512)
   PADRON_ESTUDIANTES.forEach((e, idx) => {
-    all.push({ id: `est-${e.id}`, nro: e.id, categoria: 'estudiante', subclaustro: e.subclaustro, nombre: e.nombre, dni: e.dni, postura: getInitialPostura(idx, 'estudiante'), yaVoto: false });
+    all.push({
+      id: `est-${e.id}`,
+      nro: e.id,
+      categoria: 'estudiante',
+      subclaustro: e.subclaustro,
+      nombre: e.nombre,
+      dni: e.dni,
+      postura: getInitialPostura(idx, 'estudiante'),
+      yaVoto: false,
+    });
   });
+
+  // 4. TAE (61)
   PADRON_TAE.forEach((t, idx) => {
-    all.push({ id: `tae-${t.id}`, nro: t.id, categoria: 'tae', nombre: t.nombre, dni: t.dni, nroEmpl: t.nroEmpl, postura: getInitialPostura(idx, 'tae'), yaVoto: false });
+    all.push({
+      id: `tae-${t.id}`,
+      nro: t.id,
+      categoria: 'tae',
+      nombre: t.nombre,
+      dni: t.dni,
+      nroEmpl: t.nroEmpl,
+      postura: getInitialPostura(idx, 'tae'),
+      yaVoto: false,
+    });
   });
+
+  // 5. Graduados (100)
   PADRON_GRADUADOS.forEach((g, idx) => {
-    all.push({ id: `grad-${g.id}`, nro: g.id, categoria: 'graduado', subclaustro: g.subclaustro, nombre: g.nombre, dni: g.dni, postura: getInitialPostura(idx, 'graduado'), yaVoto: false });
+    all.push({
+      id: `grad-${g.id}`,
+      nro: g.id,
+      categoria: 'graduado',
+      subclaustro: g.subclaustro,
+      nombre: g.nombre,
+      dni: g.dni,
+      postura: getInitialPostura(idx, 'graduado'),
+      yaVoto: false,
+    });
   });
+
+  // 6. Orquestas (26)
   PADRON_ORQUESTAS.forEach((o, idx) => {
-    all.push({ id: `orq-${o.id}`, nro: o.id, categoria: 'orquesta', subclaustro: o.subclaustro, nombre: o.nombre, dni: o.dni, postura: getInitialPostura(idx, 'orquesta'), yaVoto: false });
+    all.push({
+      id: `orq-${o.id}`,
+      nro: o.id,
+      categoria: 'orquesta',
+      subclaustro: o.subclaustro,
+      nombre: o.nombre,
+      dni: o.dni,
+      postura: getInitialPostura(idx, 'orquesta'),
+      yaVoto: false,
+    });
   });
 
   return all;
@@ -97,51 +178,129 @@ const ElectionContext = createContext<ElectionContextType | undefined>(undefined
 export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [categoriaActiva, setCategoriaActiva] = useState<ClaustroCategoria>('docente');
   const [modoVistaTendencia, setModoVistaTendencia] = useState<'estatutaria' | 'directa'>('estatutaria');
-  const [votantes, setVotantes] = useState<Votante[]>([]);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'conectado' | 'guardando' | 'offline'>('conectado');
 
-  // ESCUCHADOR EN TIEMPO REAL
-  useEffect(() => {
-    const dbRef = ref(db, 'boca_de_urna/votantes');
-    const unsubscribe = onValue(dbRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data && Array.isArray(data)) {
-        setVotantes(data.map((v: any) => ({
-          ...v,
-          postura: normalizePostura(v.postura),
-        })));
-      } else {
-        const iniciales = generateInitialVotantes();
-        set(dbRef, iniciales);
-        setVotantes(iniciales);
+  const [votantes, setVotantes] = useState<Votante[]>(() => {
+    try {
+      const saved =
+        localStorage.getItem(STORAGE_KEY) ||
+        localStorage.getItem('esmn_boca_urna_ponderada_v9') ||
+        localStorage.getItem('esmn_boca_urna_ponderada_v8');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 1000) {
+          return parsed.map((v: any) => ({
+            ...v,
+            postura: normalizePostura(v.postura),
+          }));
+        }
       }
-    });
+    } catch {
+      // Fallback
+    }
+    return generateInitialVotantes();
+  });
 
-    return () => unsubscribe();
+  // Local storage cache backup
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(votantes));
+    } catch {
+      // ignore
+    }
+  }, [votantes]);
+
+  // Real-time synchronization with Firestore across all 10 users
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'claustros'),
+      snapshot => {
+        if (!snapshot.empty) {
+          const remoteMap = new Map<string, Votante>();
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data && Array.isArray(data.votantes)) {
+              data.votantes.forEach((v: any) => {
+                remoteMap.set(v.id, {
+                  ...v,
+                  postura: normalizePostura(v.postura),
+                });
+              });
+            }
+          });
+
+          if (remoteMap.size > 0) {
+            setVotantes(prev => {
+              return prev.map(v => remoteMap.get(v.id) || v);
+            });
+            setCloudSyncStatus('conectado');
+          }
+        }
+      },
+      error => {
+        setCloudSyncStatus('offline');
+        console.warn('Firestore snapshot listener warning:', error);
+      }
+    );
+
+    return () => unsub();
   }, []);
 
-  const guardarEnFirebase = (nuevosVotantes: Votante[]) => {
-    set(ref(db, 'boca_de_urna/votantes'), nuevosVotantes);
-  };
+  const sincronizarCategoriaEnNube = useCallback(async (cat: ClaustroCategoria, catVoters: Votante[]) => {
+    setCloudSyncStatus('guardando');
+    try {
+      await setDoc(doc(db, 'claustros', cat), {
+        categoria: cat,
+        votantes: catVoters,
+        updatedAt: new Date().toISOString(),
+      });
+      setCloudSyncStatus('conectado');
+    } catch (err) {
+      console.warn('Error guardando en Firestore:', err);
+      setCloudSyncStatus('offline');
+    }
+  }, []);
 
   const toggleVoto = (id: string) => {
     const now = new Date();
     const hora = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    let catAfectada: ClaustroCategoria | null = null;
     const actualizados = votantes.map(v => {
       if (v.id === id) {
+        catAfectada = v.categoria;
         const nextState = !v.yaVoto;
-        return { ...v, yaVoto: nextState, horaVoto: nextState ? hora : undefined };
+        return {
+          ...v,
+          yaVoto: nextState,
+          horaVoto: nextState ? hora : undefined,
+        };
       }
       return v;
     });
+
     setVotantes(actualizados);
-    guardarEnFirebase(actualizados);
+    if (catAfectada) {
+      const votersOfCat = actualizados.filter(v => v.categoria === catAfectada);
+      sincronizarCategoriaEnNube(catAfectada, votersOfCat);
+    }
   };
 
   const cambiarPostura = (id: string, postura: Postura) => {
-    const actualizados = votantes.map(v => (v.id === id ? { ...v, postura } : v));
+    let catAfectada: ClaustroCategoria | null = null;
+    const actualizados = votantes.map(v => {
+      if (v.id === id) {
+        catAfectada = v.categoria;
+        return { ...v, postura };
+      }
+      return v;
+    });
+
     setVotantes(actualizados);
-    guardarEnFirebase(actualizados);
+    if (catAfectada) {
+      const votersOfCat = actualizados.filter(v => v.categoria === catAfectada);
+      sincronizarCategoriaEnNube(catAfectada, votersOfCat);
+    }
   };
 
   const simularVotacion = () => {
@@ -156,32 +315,53 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const willVote = ((i * 13 + 7) % 100) / 100 < threshold;
       const hora = horas[(i * 3) % horas.length];
-      return { ...v, yaVoto: willVote, horaVoto: willVote ? (v.horaVoto || hora) : undefined };
+      return {
+        ...v,
+        yaVoto: willVote,
+        horaVoto: willVote ? (v.horaVoto || hora) : undefined,
+      };
     });
+
     setVotantes(actualizados);
-    guardarEnFirebase(actualizados);
+    ALL_CATEGORIAS.forEach(cat => {
+      sincronizarCategoriaEnNube(cat, actualizados.filter(v => v.categoria === cat));
+    });
   };
 
   const reiniciarVotacion = () => {
-    const actualizados = votantes.map(v => ({ ...v, yaVoto: false, horaVoto: undefined }));
+    const actualizados = votantes.map(v => ({
+      ...v,
+      yaVoto: false,
+      horaVoto: undefined,
+    }));
     setVotantes(actualizados);
-    guardarEnFirebase(actualizados);
+    ALL_CATEGORIAS.forEach(cat => {
+      sincronizarCategoriaEnNube(cat, actualizados.filter(v => v.categoria === cat));
+    });
   };
 
   const reiniciarTodo = () => {
     const fresh = generateInitialVotantes();
     setVotantes(fresh);
-    guardarEnFirebase(fresh);
+    localStorage.removeItem(STORAGE_KEY);
+    ALL_CATEGORIAS.forEach(cat => {
+      sincronizarCategoriaEnNube(cat, fresh.filter(v => v.categoria === cat));
+    });
   };
 
   const resumen = useMemo<ResumenPonderado>(() => {
-    const categorias: ClaustroCategoria[] = ['docente', 'docente_fobam', 'estudiante', 'tae', 'graduado', 'orquesta'];
     const porClaustro: Record<ClaustroCategoria, ClaustroEstadistica> = {} as any;
 
-    let ponderacionNuestra = 0; let ponderacionLaCopla = 0; let pesoTotalEstatutario = 0;
-    let totalElectores = 0; let totalVotaron = 0; let votosGlobalesNuestra = 0; let votosGlobalesLaCopla = 0;
+    let ponderacionNuestra = 0;
+    let ponderacionLaCopla = 0;
+    let pesoTotalEstatutario = 0;
 
-    categorias.forEach(cat => {
+    let totalElectores = 0;
+    let totalVotaron = 0;
+    let votosGlobalesNuestra = 0;
+    let votosGlobalesLaCopla = 0;
+
+    ALL_CATEGORIAS.forEach(cat => {
       const list = votantes.filter(v => v.categoria === cat);
       const totalPadron = list.length;
       const votaronList = list.filter(v => v.yaVoto);
@@ -193,63 +373,104 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const partPct = totalPadron > 0 ? (cantVotaron / totalPadron) * 100 : 0;
       const poolParaTendencia = cantVotaron > 0 ? votaronList : list;
 
-      let scoreNuestra = 0; let scoreLaCopla = 0;
+      let scoreNuestra = 0;
+      let scoreLaCopla = 0;
+
       poolParaTendencia.forEach(v => {
-        if (v.postura === 'Quipu') scoreNuestra += 1;
-        if (v.postura === 'Copla') scoreLaCopla += 1;
+        switch (v.postura) {
+          case 'Quipu':
+            scoreNuestra += 1.0;
+            break;
+          case 'Copla':
+            scoreLaCopla += 1.0;
+            break;
+          case 'Indecisos':
+          default:
+            scoreNuestra += 0.50;
+            scoreLaCopla += 0.50;
+            break;
+        }
       });
 
-      const totalValidosTendencia = scoreNuestra + scoreLaCopla;
-      const pctNuestra = totalValidosTendencia > 0 ? (scoreNuestra / totalValidosTendencia) * 100 : 0;
-      const pctLaCopla = totalValidosTendencia > 0 ? (scoreLaCopla / totalValidosTendencia) * 100 : 0;
+      const totalScore = scoreNuestra + scoreLaCopla;
+      const pctNuestra = totalScore > 0 ? (scoreNuestra / totalScore) * 100 : 50;
+      const pctLaCopla = totalScore > 0 ? (scoreLaCopla / totalScore) * 100 : 50;
 
       votosGlobalesNuestra += scoreNuestra;
       votosGlobalesLaCopla += scoreLaCopla;
 
-      const peso = PESOS_ESTATUTARIOS[cat];
-      if (peso > 0 && totalValidosTendencia > 0) {
-        ponderacionNuestra += pctNuestra * peso;
-        ponderacionLaCopla += pctLaCopla * peso;
-        pesoTotalEstatutario += peso;
-      }
+      const peso = PESOS_ESTATUTARIOS[cat] || 0;
 
       porClaustro[cat] = {
         categoria: cat,
-        nombreClaustro: cat === 'docente' ? 'Docentes' : cat === 'docente_fobam' ? 'Docentes FoBaM' : cat === 'estudiante' ? 'Estudiantes' : cat === 'tae' ? 'Personal TAE' : cat === 'graduado' ? 'Graduados' : 'Orquestas',
+        nombre: NOMBRES_CLAUSTRO[cat],
+        pesoPonderacion: peso,
         totalPadron,
         totalVotaron: cantVotaron,
-        participacionPorcentaje: partPct,
-        votosQuipu: scoreNuestra,
-        votosCopla: scoreLaCopla,
-        porcentajeQuipu: pctNuestra,
-        porcentajeCopla: pctLaCopla
+        porcentajeParticipacion: Math.round(partPct * 10) / 10,
+        votosNuestraLista: Math.round(scoreNuestra * 10) / 10,
+        votosLaCopla: Math.round(scoreLaCopla * 10) / 10,
+        porcentajeNuestraLista: Math.round(pctNuestra * 10) / 10,
+        porcentajeLaCopla: Math.round(pctLaCopla * 10) / 10,
       };
+
+      if (peso > 0) {
+        ponderacionNuestra += peso * pctNuestra;
+        ponderacionLaCopla += peso * pctLaCopla;
+        pesoTotalEstatutario += peso;
+      }
     });
 
-    const denEstatutario = pesoTotalEstatutario > 0 ? pesoTotalEstatutario : 1;
-    const finalPondNuestra = ponderacionNuestra / denEstatutario;
-    const finalPondLaCopla = ponderacionLaCopla / denEstatutario;
+    const factorEstatutario = pesoTotalEstatutario > 0 ? 1 / pesoTotalEstatutario : 1;
+    const finalPctNuestra = Math.round(ponderacionNuestra * factorEstatutario * 10) / 10;
+    const finalPctLaCopla = Math.round((100 - finalPctNuestra) * 10) / 10;
 
-    const totalGlobalValidos = votosGlobalesNuestra + votosGlobalesLaCopla;
-    const finalDirNuestra = totalGlobalValidos > 0 ? (votosGlobalesNuestra / totalGlobalValidos) * 100 : 0;
-    const finalDirLaCopla = totalGlobalValidos > 0 ? (votosGlobalesLaCopla / totalGlobalValidos) * 100 : 0;
+    const totalVotosDirectos = votosGlobalesNuestra + votosGlobalesLaCopla;
+    const pctDirectoNuestra = totalVotosDirectos > 0
+      ? Math.round((votosGlobalesNuestra / totalVotosDirectos) * 1000) / 10
+      : 50;
+    const pctDirectoLaCopla = Math.round((100 - pctDirectoNuestra) * 10) / 10;
 
     return {
-      porClaustro,
+      porcentajeGeneralNuestra: finalPctNuestra,
+      porcentajeGeneralLaCopla: finalPctLaCopla,
       totalElectores,
       totalVotaron,
-      participacionGlobalPorcentaje: totalElectores > 0 ? (totalVotaron / totalElectores) * 100 : 0,
-      ponderadoQuipu: finalPondNuestra,
-      ponderadoCopla: finalPondLaCopla,
-      directoQuipu: finalDirNuestra,
-      directoCopla: finalDirLaCopla
+      participacionGlobal: totalElectores > 0 ? Math.round((totalVotaron / totalElectores) * 1000) / 10 : 0,
+      votosGlobalesNuestra: Math.round(votosGlobalesNuestra * 10) / 10,
+      votosGlobalesLaCopla: Math.round(votosGlobalesLaCopla * 10) / 10,
+      porcentajeGlobalDirectoNuestra: pctDirectoNuestra,
+      porcentajeGlobalDirectoLaCopla: pctDirectoLaCopla,
+      porClaustro,
     };
   }, [votantes]);
 
   return (
-    <ElectionContext.Provider value={{
-      votantes, resumen, categoriaActiva, setCategoriaActiva,
-      modoVistaTendencia, setModoVistaTendencia, toggleVoto,
-      cambiarPostura, simularVotacion, reiniciarVotacion, reiniciarTodo
-    }}>
+    <ElectionContext.Provider
+      value={{
+        votantes,
+        resumen,
+        categoriaActiva,
+        setCategoriaActiva,
+        modoVistaTendencia,
+        setModoVistaTendencia,
+        toggleVoto,
+        cambiarPostura,
+        simularVotacion,
+        reiniciarVotacion,
+        reiniciarTodo,
+        cloudSyncStatus,
+      }}
+    >
       {children}
+    </ElectionContext.Provider>
+  );
+};
+
+export const useElection = () => {
+  const ctx = useContext(ElectionContext);
+  if (!ctx) {
+    throw new Error('useElection must be used within ElectionProvider');
+  }
+  return ctx;
+};
