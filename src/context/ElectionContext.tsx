@@ -34,7 +34,15 @@ interface ElectionContextType {
   reiniciarTodo: () => void;
 }
 
-const STORAGE_KEY = 'esmn_boca_urna_ponderada_v7';
+const STORAGE_KEY = 'esmn_boca_urna_ponderada_v9';
+
+export function normalizePostura(raw: any): Postura {
+  if (typeof raw !== 'string') return 'Indecisos';
+  const s = raw.trim().toLowerCase();
+  if (s.includes('quipu') || s.includes('favor') || s === 'nuestra') return 'Quipu';
+  if (s.includes('copla') || s.includes('contra')) return 'Copla';
+  return 'Indecisos';
+}
 
 // Statutory weights (35% Docentes, 35% Estudiantes, 15% TAE, 15% Graduados)
 const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
@@ -61,12 +69,9 @@ function generateInitialVotantes(): Votante[] {
   // Realistic seed distribution
   const getInitialPostura = (index: number, cat: ClaustroCategoria): Postura => {
     const mod = (index * 11 + (cat === 'docente' ? 3 : cat === 'docente_fobam' ? 7 : cat === 'tae' ? 1 : 5)) % 100;
-    if (mod < 42) return 'A favor';
-    if (mod < 60) return 'Inclinado/a';
-    if (mod < 74) return 'Indeciso/a';
-    if (mod < 88) return 'En contra';
-    if (mod < 95) return 'La Copla';
-    return 'Sin contactar';
+    if (mod < 48) return 'Quipu';
+    if (mod < 76) return 'Indecisos';
+    return 'Copla';
   };
 
   // 1. Docentes (284)
@@ -164,11 +169,17 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [votantes, setVotantes] = useState<Votante[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved =
+        localStorage.getItem(STORAGE_KEY) ||
+        localStorage.getItem('esmn_boca_urna_ponderada_v8') ||
+        localStorage.getItem('esmn_boca_urna_ponderada_v7');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 1000) {
-          return parsed;
+          return parsed.map((v: any) => ({
+            ...v,
+            postura: normalizePostura(v.postura),
+          }));
         }
       }
     } catch {
@@ -288,24 +299,14 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       poolParaTendencia.forEach(v => {
         switch (v.postura) {
-          case 'A favor':
+          case 'Quipu':
             scoreNuestra += 1.0;
             break;
-          case 'Inclinado/a':
-            scoreNuestra += 0.75;
-            scoreLaCopla += 0.25;
-            break;
-          case 'Indeciso/a':
-            scoreNuestra += 0.50;
-            scoreLaCopla += 0.50;
-            break;
-          case 'En contra':
+          case 'Copla':
             scoreLaCopla += 1.0;
             break;
-          case 'La Copla':
-            scoreLaCopla += 1.0;
-            break;
-          case 'Sin contactar':
+          case 'Indecisos':
+          default:
             scoreNuestra += 0.50;
             scoreLaCopla += 0.50;
             break;

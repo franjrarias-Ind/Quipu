@@ -11,13 +11,7 @@ export type ClaustroCategoria =
   | 'graduado'
   | 'orquesta';
 
-export type Postura =
-  | 'A favor'
-  | 'Inclinado/a'
-  | 'Indeciso/a'
-  | 'En contra'
-  | 'La Copla'
-  | 'Sin contactar';
+export type Postura = 'Quipu' | 'Indecisos' | 'Copla';
 
 export interface Votante {
   id: string; // e.g. "doc-1", "fobam-12", "orq-4"

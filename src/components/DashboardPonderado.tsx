@@ -74,21 +74,21 @@ export const DashboardPonderado: React.FC = () => {
       ? resumen.porcentajeGeneralNuestra
       : resumen.porcentajeGlobalDirectoNuestra;
 
-  const pctLaCopla =
+  const pctEnContra =
     modoVistaTendencia === 'estatutaria'
-      ? resumen.porcentajeGeneralLaCopla
-      : resumen.porcentajeGlobalDirectoLaCopla;
+      ? resumen.porcentajeGeneralEnContra
+      : resumen.porcentajeGlobalDirectoEnContra;
 
   return (
     <div className="space-y-4">
-      {/* 1. Gran Barra de Tendencia Ponderada: QUIPU vs La Copla */}
+      {/* 1. Gran Barra de Tendencia Ponderada: QUIPU vs En Contra */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-emerald-400" />
               <h2 className="text-base font-bold text-white tracking-wide">
-                TENDENCIA BOCA DE URNA: QUIPU VS LA COPLA
+                TENDENCIA BOCA DE URNA: QUIPU VS EN CONTRA
               </h2>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -130,7 +130,7 @@ export const DashboardPonderado: React.FC = () => {
                   : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
               }`}
             >
-              {pctNuestra >= 50 ? '● Ventaja QUIPU' : '● Ventaja La Copla'}
+              {pctNuestra >= 50 ? '● Ventaja QUIPU' : '● Ventaja En Contra'}
             </span>
           </div>
         </div>
@@ -157,14 +157,14 @@ export const DashboardPonderado: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block">
-                  La Copla
+                  En Contra
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  {modoVistaTendencia === 'directa' && `${resumen.votosGlobalesLaCopla} votos proyectados`}
+                  {modoVistaTendencia === 'directa' && `${resumen.votosGlobalesEnContra} votos proyectados`}
                 </span>
               </div>
               <span className="text-2xl sm:text-4xl font-extrabold text-rose-400 tracking-tight">
-                {pctLaCopla.toFixed(1)}%
+                {pctEnContra.toFixed(1)}%
               </span>
             </div>
           </div>
@@ -178,7 +178,7 @@ export const DashboardPonderado: React.FC = () => {
           />
           <div
             className="h-full bg-gradient-to-r from-rose-500 to-red-600 transition-all duration-500"
-            style={{ width: `${Math.min(100, Math.max(0, pctLaCopla))}%` }}
+            style={{ width: `${Math.min(100, Math.max(0, pctEnContra))}%` }}
           />
           {/* 50% Marker */}
           <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-white/70 shadow-sm" title="50% Umbral" />
@@ -187,7 +187,7 @@ export const DashboardPonderado: React.FC = () => {
         <div className="flex justify-between items-center text-[11px] text-slate-400 mt-2">
           <span className="text-emerald-400 font-medium">0% QUIPU</span>
           <span className="text-white/70 font-bold">50% Mayoría</span>
-          <span className="text-rose-400 font-medium">100% La Copla</span>
+          <span className="text-rose-400 font-medium">100% En Contra</span>
         </div>
       </div>
 
@@ -240,11 +240,11 @@ export const DashboardPonderado: React.FC = () => {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-emerald-400 font-semibold">{c.porcentajeNuestraLista}%</span>
                   <span className="text-slate-500 text-[10px]">vs</span>
-                  <span className="text-rose-400 font-semibold">{c.porcentajeLaCopla}%</span>
+                  <span className="text-rose-400 font-semibold">{c.porcentajeEnContra}%</span>
                 </div>
                 <div className="flex items-center justify-between text-[9px] text-slate-400">
                   <span>QUIPU</span>
-                  <span>La Copla</span>
+                  <span>En Contra</span>
                 </div>
               </div>
 

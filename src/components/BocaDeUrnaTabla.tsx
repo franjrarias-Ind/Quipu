@@ -65,19 +65,13 @@ export const BocaDeUrnaTabla: React.FC = () => {
 
   const getPosturaStyle = (p: Postura) => {
     switch (p) {
-      case 'A favor':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-      case 'Inclinado/a':
-        return 'bg-teal-500/10 text-teal-300 border-teal-500/30';
-      case 'Indeciso/a':
-        return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
-      case 'En contra':
-        return 'bg-rose-500/15 text-rose-400 border-rose-500/40 font-semibold';
-      case 'La Copla':
-        return 'bg-red-500/20 text-red-300 border-red-500/40 font-bold';
-      case 'Sin contactar':
+      case 'Quipu':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold';
+      case 'Copla':
+        return 'bg-rose-500/15 text-rose-400 border-rose-500/40 font-bold';
+      case 'Indecisos':
       default:
-        return 'bg-slate-700/40 text-slate-400 border-slate-600/40';
+        return 'bg-amber-500/10 text-amber-300 border-amber-500/30 font-medium';
     }
   };
 
@@ -202,12 +196,9 @@ export const BocaDeUrnaTabla: React.FC = () => {
             className="bg-slate-800/90 border border-slate-700 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
           >
             <option value="todos">Todas las posturas</option>
-            <option value="A favor">A favor (QUIPU)</option>
-            <option value="Inclinado/a">Inclinado/a</option>
-            <option value="Indeciso/a">Indeciso/a</option>
-            <option value="En contra">En contra</option>
-            <option value="La Copla">La Copla</option>
-            <option value="Sin contactar">Sin contactar</option>
+            <option value="Quipu">Quipu</option>
+            <option value="Indecisos">Indecisos</option>
+            <option value="Copla">Copla</option>
           </select>
         </div>
       </div>
@@ -279,12 +270,9 @@ export const BocaDeUrnaTabla: React.FC = () => {
                         v.postura
                       )}`}
                     >
-                      <option value="A favor" className="bg-slate-900 text-emerald-400">A favor (QUIPU)</option>
-                      <option value="Inclinado/a" className="bg-slate-900 text-teal-300">Inclinado/a</option>
-                      <option value="Indeciso/a" className="bg-slate-900 text-amber-300">Indeciso/a</option>
-                      <option value="En contra" className="bg-slate-900 text-rose-400 font-semibold">En contra</option>
-                      <option value="La Copla" className="bg-slate-900 text-red-400 font-bold">La Copla</option>
-                      <option value="Sin contactar" className="bg-slate-900 text-slate-400">Sin contactar</option>
+                      <option value="Quipu" className="bg-slate-900 text-emerald-400 font-semibold">Quipu</option>
+                      <option value="Indecisos" className="bg-slate-900 text-amber-300 font-medium">Indecisos</option>
+                      <option value="Copla" className="bg-slate-900 text-rose-400 font-bold">Copla</option>
                     </select>
                   </td>
 
