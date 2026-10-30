@@ -1,53 +1,59 @@
-export type Postura = 'A favor' | 'Inclinado/a' | 'Indeciso/a' | 'Otra opción' | 'Sin contactar';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-export type ProbabilidadVoto = 'Alta' | 'Media' | 'Baja';
+export type ClaustroCategoria =
+  | 'docente'
+  | 'docente_fobam'
+  | 'estudiante'
+  | 'tae'
+  | 'graduado'
+  | 'orquesta';
 
-export type BocaUrnaOpcion = 'Nuestra Lista' | 'Otra Lista' | 'Blanco' | 'No contesta' | 'No encuestado';
+export type Postura =
+  | 'A favor'
+  | 'Inclinado/a'
+  | 'Indeciso/a'
+  | 'En contra'
+  | 'La Copla'
+  | 'Sin contactar';
 
-export interface Docente {
-  id: number;
+export interface Votante {
+  id: string; // e.g. "doc-1", "fobam-12", "orq-4"
+  nro: number;
+  categoria: ClaustroCategoria;
+  subclaustro?: string; // 'Pregrado', 'Grado', 'PADRÓN FOBAM', etc.
+  nombre: string;
+  dni: string;
   nroEmpl?: string;
-  nombre: string;
-  dni?: string;
-  responsable: string;
   postura: Postura;
-  probabilidadVotar: ProbabilidadVoto;
   yaVoto: boolean;
-  horaVoto?: string; // e.g. "10:45"
-  bocaDeUrna?: BocaUrnaOpcion;
-  ultimoContacto?: string; // YYYY-MM-DD
-  notas?: string;
-  avisoMovilizacion?: 'Pendiente' | 'Llamado' | 'En camino' | 'Votó' | 'No asistirá';
-  departamento?: string;
-  telefono?: string;
-  votoPadronOriginal?: boolean;
+  horaVoto?: string; // e.g. "11:24"
 }
 
-export interface MiembroEquipo {
-  id: string;
+export interface ClaustroEstadistica {
+  categoria: ClaustroCategoria;
   nombre: string;
-  rol?: string;
-  telefono?: string;
-  color?: string;
+  pesoPonderacion: number; // e.g. 0.35, 0.15, etc.
+  totalPadron: number;
+  totalVotaron: number;
+  porcentajeParticipacion: number;
+  votosNuestraLista: number;
+  votosLaCopla: number;
+  porcentajeNuestraLista: number;
+  porcentajeLaCopla: number;
 }
 
-export interface BocaUrnaConteoRapido {
-  nuestraLista: number;
-  otraLista: number;
-  enBlanco: number;
-  anulado: number;
-  noSabeNoContesta: number;
-}
-
-export interface RegistroHorario {
-  hora: string; // "08:00", "09:00", etc.
-  votosAcumulados: number;
-  votosHora: number;
-}
-
-export interface ParametrosTendencia {
-  porcentajeInclinados: number; // Por defecto 75%
-  porcentajeIndecisosAFavor: number; // Por defecto 30%
-  porcentajeSinContactarAFavor: number; // Por defecto 20%
-  metaVotosVictoria: number; // Por defecto calculada
+export interface ResumenPonderado {
+  porcentajeGeneralNuestra: number;
+  porcentajeGeneralLaCopla: number;
+  totalElectores: number;
+  totalVotaron: number;
+  participacionGlobal: number;
+  votosGlobalesNuestra: number;
+  votosGlobalesLaCopla: number;
+  porcentajeGlobalDirectoNuestra: number;
+  porcentajeGlobalDirectoLaCopla: number;
+  porClaustro: Record<ClaustroCategoria, ClaustroEstadistica>;
 }

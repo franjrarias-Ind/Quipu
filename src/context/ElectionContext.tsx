@@ -1,398 +1,384 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Docente, MiembroEquipo, BocaUrnaConteoRapido, ParametrosTendencia, Postura, ProbabilidadVoto } from '../types/election';
-import { generarPadronDocenteInicial, EQUIPO_INICIAL } from '../data/initialPadron';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import {
+  ClaustroCategoria,
+  Postura,
+  Votante,
+  ResumenPonderado,
+  ClaustroEstadistica
+} from '../types/election';
+import {
+  PADRON_DOCENTES,
+  PADRON_DOCENTES_FOBAM,
+  PADRON_ESTUDIANTES,
+  PADRON_TAE,
+  PADRON_GRADUADOS,
+  PADRON_ORQUESTAS
+} from '../data/padronesData';
 
 interface ElectionContextType {
-  docentes: Docente[];
-  equipo: MiembroEquipo[];
-  conteoRapidoBocaUrna: BocaUrnaConteoRapido;
-  parametros: ParametrosTendencia;
-  marcarVoto: (id: number, yaVoto: boolean) => void;
-  actualizarDocente: (id: number, updates: Partial<Docente>) => void;
-  actualizarPostura: (id: number, postura: Postura) => void;
-  actualizarProbabilidad: (id: number, probabilidad: ProbabilidadVoto) => void;
-  actualizarResponsable: (id: number, responsable: string) => void;
-  actualizarBocaUrna: (id: number, opcion: Docente['bocaDeUrna']) => void;
-  actualizarNota: (id: number, notas: string) => void;
-  incrementarConteoRapido: (opcion: keyof BocaUrnaConteoRapido) => void;
-  decrementarConteoRapido: (opcion: keyof BocaUrnaConteoRapido) => void;
-  actualizarParametros: (params: Partial<ParametrosTendencia>) => void;
-  agregarMiembroEquipo: (miembro: Omit<MiembroEquipo, 'id'>) => void;
-  eliminarMiembroEquipo: (id: string) => void;
-  reasignarResponsableMasivo: (deResponsable: string, aResponsable: string) => void;
-  cargarSimulacionComicios: () => void;
-  reiniciarJornada: () => void;
-  reiniciarTodoPadrón: () => void;
-  importarDatos: (docentesNuevos: Docente[], equipoNuevo?: MiembroEquipo[]) => void;
-  exportarCSV: () => void;
+  votantes: Votante[];
+  resumen: ResumenPonderado;
+  categoriaActiva: ClaustroCategoria;
+  setCategoriaActiva: (cat: ClaustroCategoria) => void;
+  modoVistaTendencia: 'estatutaria' | 'directa';
+  setModoVistaTendencia: (modo: 'estatutaria' | 'directa') => void;
+  toggleVoto: (id: string) => void;
+  cambiarPostura: (id: string, postura: Postura) => void;
+  simularVotacion: () => void;
+  reiniciarVotacion: () => void;
+  reiniciarTodo: () => void;
 }
 
-const STORAGE_KEY = 'esmn_punteo_docente_data_v4';
+const STORAGE_KEY = 'esmn_boca_urna_ponderada_v7';
+
+// Statutory weights (35% Docentes, 35% Estudiantes, 15% TAE, 15% Graduados)
+const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
+  docente: 0.35,
+  docente_fobam: 0,
+  estudiante: 0.35,
+  tae: 0.15,
+  graduado: 0.15,
+  orquesta: 0,
+};
+
+const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
+  docente: 'Docentes',
+  docente_fobam: 'Docentes FoBaM',
+  estudiante: 'Estudiantes',
+  tae: 'Personal TAE',
+  graduado: 'Graduados',
+  orquesta: 'Orquestas',
+};
+
+function generateInitialVotantes(): Votante[] {
+  const all: Votante[] = [];
+
+  // Realistic seed distribution
+  const getInitialPostura = (index: number, cat: ClaustroCategoria): Postura => {
+    const mod = (index * 11 + (cat === 'docente' ? 3 : cat === 'docente_fobam' ? 7 : cat === 'tae' ? 1 : 5)) % 100;
+    if (mod < 42) return 'A favor';
+    if (mod < 60) return 'Inclinado/a';
+    if (mod < 74) return 'Indeciso/a';
+    if (mod < 88) return 'En contra';
+    if (mod < 95) return 'La Copla';
+    return 'Sin contactar';
+  };
+
+  // 1. Docentes (284)
+  PADRON_DOCENTES.forEach((d, idx) => {
+    all.push({
+      id: `doc-${d.id}`,
+      nro: d.id,
+      categoria: 'docente',
+      nombre: d.nombre,
+      dni: d.dni,
+      nroEmpl: d.nroEmpl,
+      postura: getInitialPostura(idx, 'docente'),
+      yaVoto: false,
+    });
+  });
+
+  // 2. Docentes FoBaM (238)
+  PADRON_DOCENTES_FOBAM.forEach((f, idx) => {
+    all.push({
+      id: `fobam-${f.id}`,
+      nro: f.id,
+      categoria: 'docente_fobam',
+      subclaustro: f.subclaustro,
+      nombre: f.nombre,
+      dni: f.dni,
+      postura: getInitialPostura(idx, 'docente_fobam'),
+      yaVoto: false,
+    });
+  });
+
+  // 3. Estudiantes (512)
+  PADRON_ESTUDIANTES.forEach((e, idx) => {
+    all.push({
+      id: `est-${e.id}`,
+      nro: e.id,
+      categoria: 'estudiante',
+      subclaustro: e.subclaustro,
+      nombre: e.nombre,
+      dni: e.dni,
+      postura: getInitialPostura(idx, 'estudiante'),
+      yaVoto: false,
+    });
+  });
+
+  // 4. TAE (61)
+  PADRON_TAE.forEach((t, idx) => {
+    all.push({
+      id: `tae-${t.id}`,
+      nro: t.id,
+      categoria: 'tae',
+      nombre: t.nombre,
+      dni: t.dni,
+      nroEmpl: t.nroEmpl,
+      postura: getInitialPostura(idx, 'tae'),
+      yaVoto: false,
+    });
+  });
+
+  // 5. Graduados (100)
+  PADRON_GRADUADOS.forEach((g, idx) => {
+    all.push({
+      id: `grad-${g.id}`,
+      nro: g.id,
+      categoria: 'graduado',
+      subclaustro: g.subclaustro,
+      nombre: g.nombre,
+      dni: g.dni,
+      postura: getInitialPostura(idx, 'graduado'),
+      yaVoto: false,
+    });
+  });
+
+  // 6. Orquestas (26)
+  PADRON_ORQUESTAS.forEach((o, idx) => {
+    all.push({
+      id: `orq-${o.id}`,
+      nro: o.id,
+      categoria: 'orquesta',
+      subclaustro: o.subclaustro,
+      nombre: o.nombre,
+      dni: o.dni,
+      postura: getInitialPostura(idx, 'orquesta'),
+      yaVoto: false,
+    });
+  });
+
+  return all;
+}
 
 const ElectionContext = createContext<ElectionContextType | undefined>(undefined);
 
 export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [docentes, setDocentes] = useState<Docente[]>(() => {
+  const [categoriaActiva, setCategoriaActiva] = useState<ClaustroCategoria>('docente');
+  const [modoVistaTendencia, setModoVistaTendencia] = useState<'estatutaria' | 'directa'>('estatutaria');
+
+  const [votantes, setVotantes] = useState<Votante[]>(() => {
     try {
-      const saved = localStorage.getItem(`${STORAGE_KEY}_docentes`);
+      const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 1000) {
+          return parsed;
+        }
       }
-    } catch (e) {
-      console.error('Error loading saved docentes', e);
+    } catch {
+      // Fallback
     }
-    return generarPadronDocenteInicial();
+    return generateInitialVotantes();
   });
-
-  const [equipo, setEquipo] = useState<MiembroEquipo[]>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_KEY}_equipo`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading saved team', e);
-    }
-    return EQUIPO_INICIAL;
-  });
-
-  const [conteoRapidoBocaUrna, setConteoRapidoBocaUrna] = useState<BocaUrnaConteoRapido>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_KEY}_boca_urna`);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading exit poll quick count', e);
-    }
-    return {
-      nuestraLista: 0,
-      otraLista: 0,
-      enBlanco: 0,
-      anulado: 0,
-      noSabeNoContesta: 0,
-    };
-  });
-
-  const [parametros, setParametros] = useState<ParametrosTendencia>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_KEY}_params`);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading params', e);
-    }
-    return {
-      porcentajeInclinados: 75,
-      porcentajeIndecisosAFavor: 35,
-      porcentajeSinContactarAFavor: 20,
-      metaVotosVictoria: 143, // 50% + 1 del padrón total de 284
-    };
-  });
-
-  // Guardar en localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(`${STORAGE_KEY}_docentes`, JSON.stringify(docentes));
-    } catch (e) {
-      console.error('Could not save docentes', e);
-    }
-  }, [docentes]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(`${STORAGE_KEY}_equipo`, JSON.stringify(equipo));
-    } catch (e) {
-      console.error('Could not save equipo', e);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(votantes));
+    } catch {
+      // ignore
     }
-  }, [equipo]);
+  }, [votantes]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(`${STORAGE_KEY}_boca_urna`, JSON.stringify(conteoRapidoBocaUrna));
-    } catch (e) {
-      console.error('Could not save boca urna', e);
-    }
-  }, [conteoRapidoBocaUrna]);
+  const toggleVoto = (id: string) => {
+    const now = new Date();
+    const hora = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(`${STORAGE_KEY}_params`, JSON.stringify(parametros));
-    } catch (e) {
-      console.error('Could not save params', e);
-    }
-  }, [parametros]);
-
-  const marcarVoto = (id: number, yaVoto: boolean) => {
-    const ahora = new Date();
-    const horaStr = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
-    
-    setDocentes(prev =>
-      prev.map(d => {
-        if (d.id === id) {
+    setVotantes(prev =>
+      prev.map(v => {
+        if (v.id === id) {
+          const nextState = !v.yaVoto;
           return {
-            ...d,
-            yaVoto,
-            horaVoto: yaVoto ? horaStr : undefined,
-            avisoMovilizacion: yaVoto ? 'Votó' : d.avisoMovilizacion === 'Votó' ? 'Pendiente' : d.avisoMovilizacion,
+            ...v,
+            yaVoto: nextState,
+            horaVoto: nextState ? hora : undefined,
           };
         }
-        return d;
+        return v;
       })
     );
   };
 
-  const actualizarDocente = (id: number, updates: Partial<Docente>) => {
-    setDocentes(prev => prev.map(d => (d.id === id ? { ...d, ...updates } : d)));
-  };
-
-  const actualizarPostura = (id: number, postura: Postura) => {
-    setDocentes(prev =>
-      prev.map(d =>
-        d.id === id
-          ? {
-              ...d,
-              postura,
-              ultimoContacto: new Date().toISOString().split('T')[0],
-            }
-          : d
-      )
+  const cambiarPostura = (id: string, postura: Postura) => {
+    setVotantes(prev =>
+      prev.map(v => (v.id === id ? { ...v, postura } : v))
     );
   };
 
-  const actualizarProbabilidad = (id: number, probabilidadVotar: ProbabilidadVoto) => {
-    setDocentes(prev =>
-      prev.map(d =>
-        d.id === id
-          ? {
-              ...d,
-              probabilidadVotar,
-              ultimoContacto: d.ultimoContacto || new Date().toISOString().split('T')[0],
-            }
-          : d
-      )
+  const simularVotacion = () => {
+    const horas = ['08:20', '09:15', '10:05', '11:20', '12:45', '14:15', '15:30', '16:45'];
+    setVotantes(prev =>
+      prev.map((v, i) => {
+        let threshold = 0.52;
+        if (v.categoria === 'docente') threshold = 0.68;
+        else if (v.categoria === 'docente_fobam') threshold = 0.55;
+        else if (v.categoria === 'tae') threshold = 0.78;
+        else if (v.categoria === 'graduado') threshold = 0.50;
+        else if (v.categoria === 'orquesta') threshold = 0.65;
+
+        const willVote = ((i * 13 + 7) % 100) / 100 < threshold;
+        const hora = horas[(i * 3) % horas.length];
+        return {
+          ...v,
+          yaVoto: willVote,
+          horaVoto: willVote ? (v.horaVoto || hora) : undefined,
+        };
+      })
     );
   };
 
-  const actualizarResponsable = (id: number, responsable: string) => {
-    setDocentes(prev => prev.map(d => (d.id === id ? { ...d, responsable } : d)));
-  };
-
-  const actualizarBocaUrna = (id: number, bocaDeUrna: Docente['bocaDeUrna']) => {
-    setDocentes(prev => prev.map(d => (d.id === id ? { ...d, bocaDeUrna } : d)));
-  };
-
-  const actualizarNota = (id: number, notas: string) => {
-    setDocentes(prev =>
-      prev.map(d =>
-        d.id === id
-          ? {
-              ...d,
-              notas,
-              ultimoContacto: new Date().toISOString().split('T')[0],
-            }
-          : d
-      )
-    );
-  };
-
-  const incrementarConteoRapido = (opcion: keyof BocaUrnaConteoRapido) => {
-    setConteoRapidoBocaUrna(prev => ({
-      ...prev,
-      [opcion]: prev[opcion] + 1,
-    }));
-  };
-
-  const decrementarConteoRapido = (opcion: keyof BocaUrnaConteoRapido) => {
-    setConteoRapidoBocaUrna(prev => ({
-      ...prev,
-      [opcion]: Math.max(0, prev[opcion] - 1),
-    }));
-  };
-
-  const actualizarParametros = (params: Partial<ParametrosTendencia>) => {
-    setParametros(prev => ({ ...prev, ...params }));
-  };
-
-  const agregarMiembroEquipo = (miembro: Omit<MiembroEquipo, 'id'>) => {
-    const nuevo: MiembroEquipo = {
-      ...miembro,
-      id: String(Date.now()),
-    };
-    setEquipo(prev => [...prev, nuevo]);
-  };
-
-  const eliminarMiembroEquipo = (id: string) => {
-    setEquipo(prev => prev.filter(m => m.id !== id));
-  };
-
-  const reasignarResponsableMasivo = (deResponsable: string, aResponsable: string) => {
-    setDocentes(prev =>
-      prev.map(d => (d.responsable === deResponsable ? { ...d, responsable: aResponsable } : d))
-    );
-  };
-
-  // Simulación realista de jornada de votación en marcha (52% de participación)
-  const cargarSimulacionComicios = () => {
-    const horasSimuladas = ['08:15', '08:45', '09:10', '09:40', '10:05', '10:35', '11:15', '11:50', '12:20', '13:00', '13:40', '14:15', '14:50'];
-    let exitNuestra = 0;
-    let exitOtra = 0;
-    let exitBlanco = 0;
-
-    const nuevos = docentes.map((doc, idx) => {
-      // Simular que el ~54% ya votó
-      // Quienes tienen postura A favor o Inclinado con probabilidad Alta votan más temprano
-      const probabilidadVotado =
-        doc.postura === 'A favor' && doc.probabilidadVotar === 'Alta' ? 0.85 :
-        doc.postura === 'A favor' ? 0.65 :
-        doc.postura === 'Inclinado/a' ? 0.55 :
-        doc.postura === 'Otra opción' ? 0.50 : 0.35;
-
-      const votoEfectuado = ((idx * 37) % 100) < (probabilidadVotado * 100);
-      const horaVoto = votoEfectuado ? horasSimuladas[idx % horasSimuladas.length] : undefined;
-
-      let bocaDeUrna: Docente['bocaDeUrna'] = 'No encuestado';
-      if (votoEfectuado && idx % 3 === 0) {
-        if (doc.postura === 'A favor') {
-          bocaDeUrna = 'Nuestra Lista';
-          exitNuestra++;
-        } else if (doc.postura === 'Otra opción') {
-          bocaDeUrna = 'Otra Lista';
-          exitOtra++;
-        } else if (doc.postura === 'Inclinado/a') {
-          bocaDeUrna = idx % 4 === 0 ? 'Otra Lista' : 'Nuestra Lista';
-          if (bocaDeUrna === 'Nuestra Lista') exitNuestra++; else exitOtra++;
-        } else {
-          bocaDeUrna = 'Blanco';
-          exitBlanco++;
-        }
-      }
-
-      return {
-        ...doc,
-        yaVoto: votoEfectuado,
-        horaVoto,
-        bocaDeUrna,
-        avisoMovilizacion: votoEfectuado ? ('Votó' as const) : ((idx % 5 === 0) ? ('En camino' as const) : ('Pendiente' as const)),
-      };
-    });
-
-    setDocentes(nuevos);
-    setConteoRapidoBocaUrna({
-      nuestraLista: exitNuestra + 24,
-      otraLista: exitOtra + 16,
-      enBlanco: exitBlanco + 3,
-      anulado: 1,
-      noSabeNoContesta: 7,
-    });
-  };
-
-  const reiniciarJornada = () => {
-    setDocentes(prev =>
-      prev.map(d => ({
-        ...d,
+  const reiniciarVotacion = () => {
+    setVotantes(prev =>
+      prev.map(v => ({
+        ...v,
         yaVoto: false,
         horaVoto: undefined,
-        bocaDeUrna: 'No encuestado',
-        avisoMovilizacion: 'Pendiente',
       }))
     );
-    setConteoRapidoBocaUrna({
-      nuestraLista: 0,
-      otraLista: 0,
-      enBlanco: 0,
-      anulado: 0,
-      noSabeNoContesta: 0,
-    });
   };
 
-  const reiniciarTodoPadrón = () => {
-    const inicial = generarPadronDocenteInicial();
-    setDocentes(inicial);
-    setEquipo(EQUIPO_INICIAL);
-    setConteoRapidoBocaUrna({
-      nuestraLista: 0,
-      otraLista: 0,
-      enBlanco: 0,
-      anulado: 0,
-      noSabeNoContesta: 0,
-    });
+  const reiniciarTodo = () => {
+    const fresh = generateInitialVotantes();
+    setVotantes(fresh);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
-  const importarDatos = (docentesNuevos: Docente[], equipoNuevo?: MiembroEquipo[]) => {
-    if (docentesNuevos && docentesNuevos.length > 0) {
-      setDocentes(docentesNuevos);
-    }
-    if (equipoNuevo && equipoNuevo.length > 0) {
-      setEquipo(equipoNuevo);
-    }
-  };
-
-  const exportarCSV = () => {
-    const headers = [
-      'N°',
-      'N° Empl',
-      'Apellido y Nombre',
-      'DNI',
-      'Responsable',
-      'Postura',
-      'Probabilidad Voto',
-      '¿Votó?',
-      'Hora Voto',
-      'Boca de Urna Sondeo',
-      'Último Contacto',
-      'Notas',
+  const resumen = useMemo<ResumenPonderado>(() => {
+    const categorias: ClaustroCategoria[] = [
+      'docente',
+      'docente_fobam',
+      'estudiante',
+      'tae',
+      'graduado',
+      'orquesta'
     ];
+    const porClaustro: Record<ClaustroCategoria, ClaustroEstadistica> = {} as any;
 
-    const rows = docentes.map(d => [
-      d.id,
-      d.nroEmpl || '',
-      `"${d.nombre.replace(/"/g, '""')}"`,
-      d.dni || '',
-      `"${d.responsable.replace(/"/g, '""')}"`,
-      `"${d.postura}"`,
-      `"${d.probabilidadVotar}"`,
-      d.yaVoto ? 'SI' : 'NO',
-      d.horaVoto || '',
-      `"${d.bocaDeUrna || ''}"`,
-      d.ultimoContacto || '',
-      `"${(d.notas || '').replace(/"/g, '""')}"`,
-    ]);
+    let ponderacionNuestra = 0;
+    let ponderacionLaCopla = 0;
+    let pesoTotalEstatutario = 0;
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Punteo_ESMN_Boca_De_Urna_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    let totalElectores = 0;
+    let totalVotaron = 0;
+    let votosGlobalesNuestra = 0;
+    let votosGlobalesLaCopla = 0;
+
+    categorias.forEach(cat => {
+      const list = votantes.filter(v => v.categoria === cat);
+      const totalPadron = list.length;
+      const votaronList = list.filter(v => v.yaVoto);
+      const cantVotaron = votaronList.length;
+
+      totalElectores += totalPadron;
+      totalVotaron += cantVotaron;
+
+      const partPct = totalPadron > 0 ? (cantVotaron / totalPadron) * 100 : 0;
+
+      // Base voters for trend:
+      // If people have voted, calculate based on voted; otherwise calculate baseline from all
+      const poolParaTendencia = cantVotaron > 0 ? votaronList : list;
+
+      let scoreNuestra = 0;
+      let scoreLaCopla = 0;
+
+      poolParaTendencia.forEach(v => {
+        switch (v.postura) {
+          case 'A favor':
+            scoreNuestra += 1.0;
+            break;
+          case 'Inclinado/a':
+            scoreNuestra += 0.75;
+            scoreLaCopla += 0.25;
+            break;
+          case 'Indeciso/a':
+            scoreNuestra += 0.50;
+            scoreLaCopla += 0.50;
+            break;
+          case 'En contra':
+            scoreLaCopla += 1.0;
+            break;
+          case 'La Copla':
+            scoreLaCopla += 1.0;
+            break;
+          case 'Sin contactar':
+            scoreNuestra += 0.50;
+            scoreLaCopla += 0.50;
+            break;
+        }
+      });
+
+      const totalScore = scoreNuestra + scoreLaCopla;
+      const pctNuestra = totalScore > 0 ? (scoreNuestra / totalScore) * 100 : 50;
+      const pctLaCopla = totalScore > 0 ? (scoreLaCopla / totalScore) * 100 : 50;
+
+      votosGlobalesNuestra += scoreNuestra;
+      votosGlobalesLaCopla += scoreLaCopla;
+
+      const peso = PESOS_ESTATUTARIOS[cat] || 0;
+
+      porClaustro[cat] = {
+        categoria: cat,
+        nombre: NOMBRES_CLAUSTRO[cat],
+        pesoPonderacion: peso,
+        totalPadron,
+        totalVotaron: cantVotaron,
+        porcentajeParticipacion: Math.round(partPct * 10) / 10,
+        votosNuestraLista: Math.round(scoreNuestra * 10) / 10,
+        votosLaCopla: Math.round(scoreLaCopla * 10) / 10,
+        porcentajeNuestraLista: Math.round(pctNuestra * 10) / 10,
+        porcentajeLaCopla: Math.round(pctLaCopla * 10) / 10,
+      };
+
+      if (peso > 0) {
+        ponderacionNuestra += peso * pctNuestra;
+        ponderacionLaCopla += peso * pctLaCopla;
+        pesoTotalEstatutario += peso;
+      }
+    });
+
+    const factorEstatutario = pesoTotalEstatutario > 0 ? 1 / pesoTotalEstatutario : 1;
+    const finalPctNuestra = Math.round(ponderacionNuestra * factorEstatutario * 10) / 10;
+    const finalPctLaCopla = Math.round((100 - finalPctNuestra) * 10) / 10;
+
+    const totalVotosDirectos = votosGlobalesNuestra + votosGlobalesLaCopla;
+    const pctDirectoNuestra = totalVotosDirectos > 0
+      ? Math.round((votosGlobalesNuestra / totalVotosDirectos) * 1000) / 10
+      : 50;
+    const pctDirectoLaCopla = Math.round((100 - pctDirectoNuestra) * 10) / 10;
+
+    return {
+      porcentajeGeneralNuestra: finalPctNuestra,
+      porcentajeGeneralLaCopla: finalPctLaCopla,
+      totalElectores,
+      totalVotaron,
+      participacionGlobal: totalElectores > 0 ? Math.round((totalVotaron / totalElectores) * 1000) / 10 : 0,
+      votosGlobalesNuestra: Math.round(votosGlobalesNuestra * 10) / 10,
+      votosGlobalesLaCopla: Math.round(votosGlobalesLaCopla * 10) / 10,
+      porcentajeGlobalDirectoNuestra: pctDirectoNuestra,
+      porcentajeGlobalDirectoLaCopla: pctDirectoLaCopla,
+      porClaustro,
+    };
+  }, [votantes]);
 
   return (
     <ElectionContext.Provider
       value={{
-        docentes,
-        equipo,
-        conteoRapidoBocaUrna,
-        parametros,
-        marcarVoto,
-        actualizarDocente,
-        actualizarPostura,
-        actualizarProbabilidad,
-        actualizarResponsable,
-        actualizarBocaUrna,
-        actualizarNota,
-        incrementarConteoRapido,
-        decrementarConteoRapido,
-        actualizarParametros,
-        agregarMiembroEquipo,
-        eliminarMiembroEquipo,
-        reasignarResponsableMasivo,
-        cargarSimulacionComicios,
-        reiniciarJornada,
-        reiniciarTodoPadrón,
-        importarDatos,
-        exportarCSV,
+        votantes,
+        resumen,
+        categoriaActiva,
+        setCategoriaActiva,
+        modoVistaTendencia,
+        setModoVistaTendencia,
+        toggleVoto,
+        cambiarPostura,
+        simularVotacion,
+        reiniciarVotacion,
+        reiniciarTodo,
       }}
     >
       {children}
@@ -401,9 +387,9 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 };
 
 export const useElection = () => {
-  const context = useContext(ElectionContext);
-  if (!context) {
-    throw new Error('useElection must be used within an ElectionProvider');
+  const ctx = useContext(ElectionContext);
+  if (!ctx) {
+    throw new Error('useElection must be used within ElectionProvider');
   }
-  return context;
+  return ctx;
 };
