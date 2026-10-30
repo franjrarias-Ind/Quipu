@@ -1,3 +1,14 @@
+import { initializeApp } from "https://gstatic.com";
+import { getDatabase, ref, set, onValue } from "https://gstatic.com";
+
+// Vercel leerá automáticamente el VALUE que pegaste en su panel
+const firebaseConfig = {
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://console.firebase.google.com/"
+};
+
+// Inicializamos Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
