@@ -24,7 +24,7 @@ import {
 
 // Configuración de Firebase - Utiliza la URL de Vercel
 const firebaseConfig = {
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || "https://console.firebase.google.com/"
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || "TU_URL_DE_FIREBASE_AQUI"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -99,7 +99,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [modoVistaTendencia, setModoVistaTendencia] = useState<'estatutaria' | 'directa'>('estatutaria');
   const [votantes, setVotantes] = useState<Votante[]>([]);
 
-  // ESCUCHADOR EN TIEMPO REAL: Trae los datos de Firebase apenas carga la app o cuando otro usuario vota
+  // ESCUCHADOR EN TIEMPO REAL
   useEffect(() => {
     const dbRef = ref(db, 'boca_de_urna/votantes');
     const unsubscribe = onValue(dbRef, (snapshot) => {
@@ -110,7 +110,6 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           postura: normalizePostura(v.postura),
         })));
       } else {
-        // Si Firebase está vacío, inicializa los votantes por primera vez
         const iniciales = generateInitialVotantes();
         set(dbRef, iniciales);
         setVotantes(iniciales);
@@ -120,7 +119,6 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => unsubscribe();
   }, []);
 
-  // Función interna para sincronizar el estado local con Firebase
   const guardarEnFirebase = (nuevosVotantes: Votante[]) => {
     set(ref(db, 'boca_de_urna/votantes'), nuevosVotantes);
   };
@@ -250,4 +248,8 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <ElectionContext.Provider value={{
-
+      votantes, resumen, categoriaActiva, setCategoriaActiva,
+      modoVistaTendencia, setModoVistaTendencia, toggleVoto,
+      cambiarPostura, simularVotacion, reiniciarVotacion, reiniciarTodo
+    }}>
+      {children}
