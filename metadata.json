@@ -1,0 +1,6 @@
+{
+  "name": "Boca de Urna y Punteo Docente ESMN",
+  "description": "Sistema de punteo docente, control de boca de urna en tiempo real y análisis de tendencia de voto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
