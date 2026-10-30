@@ -37,7 +37,7 @@ interface ElectionContextType {
   cloudSyncStatus: 'conectado' | 'guardando' | 'offline';
 }
 
-const STORAGE_KEY = 'esmn_boca_urna_ponderada_v11';
+const STORAGE_KEY = 'esmn_boca_urna_ponderada_v12';
 
 export function normalizePostura(raw: any): Postura {
   if (typeof raw !== 'string') return 'No sabe';
@@ -48,10 +48,19 @@ export function normalizePostura(raw: any): Postura {
 }
 
 export function normalizeVotante(v: any): Votante {
-  const cat: ClaustroCategoria =
-    v.categoria === 'docente_fobam' ? 'docente' : (v.categoria as ClaustroCategoria);
-  const sub =
-    v.categoria === 'docente_fobam' ? (v.subclaustro || 'FoBaM') : v.subclaustro;
+  let cat: ClaustroCategoria = 'docente';
+  let sub = v.subclaustro;
+
+  if (v.categoria === 'docente_fobam') {
+    cat = 'docente';
+    sub = v.subclaustro || 'FoBaM';
+  } else if (v.categoria === 'orquesta') {
+    cat = 'docente';
+    sub = v.subclaustro || 'Orquesta';
+  } else if (['docente', 'estudiante', 'tae', 'graduado'].includes(v.categoria)) {
+    cat = v.categoria as ClaustroCategoria;
+  }
+
   return {
     ...v,
     categoria: cat,
@@ -66,7 +75,6 @@ const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
   estudiante: 0.35,
   tae: 0.15,
   graduado: 0.15,
-  orquesta: 0,
 };
 
 const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
@@ -74,7 +82,6 @@ const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
   estudiante: 'Estudiantes',
   tae: 'Personal TAE',
   graduado: 'Graduados',
-  orquesta: 'Orquestas',
 };
 
 const ALL_CATEGORIAS: ClaustroCategoria[] = [
@@ -82,7 +89,6 @@ const ALL_CATEGORIAS: ClaustroCategoria[] = [
   'estudiante',
   'tae',
   'graduado',
-  'orquesta',
 ];
 
 function generateInitialVotantes(): Votante[] {
@@ -111,7 +117,7 @@ function generateInitialVotantes(): Votante[] {
     });
   });
 
-  // 2. Docentes FoBaM (238) - Juntos en el único ítem "Docentes"
+  // 2. Docentes FoBaM (238) - Juntos en el ítem Docentes
   PADRON_DOCENTES_FOBAM.forEach((f, idx) => {
     all.push({
       id: `fobam-${f.id}`,
@@ -125,7 +131,21 @@ function generateInitialVotantes(): Votante[] {
     });
   });
 
-  // 3. Estudiantes (512)
+  // 3. Orquestas (26) - Juntos en el ítem Docentes
+  PADRON_ORQUESTAS.forEach((o, idx) => {
+    all.push({
+      id: `orq-${o.id}`,
+      nro: 522 + o.id,
+      categoria: 'docente',
+      subclaustro: 'Orquesta',
+      nombre: o.nombre,
+      dni: o.dni,
+      postura: getInitialPostura(522 + idx),
+      yaVoto: false,
+    });
+  });
+
+  // 4. Estudiantes (512)
   PADRON_ESTUDIANTES.forEach((e, idx) => {
     all.push({
       id: `est-${e.id}`,
@@ -134,12 +154,12 @@ function generateInitialVotantes(): Votante[] {
       subclaustro: e.subclaustro,
       nombre: e.nombre,
       dni: e.dni,
-      postura: getInitialPostura(522 + idx),
+      postura: getInitialPostura(548 + idx),
       yaVoto: false,
     });
   });
 
-  // 4. TAE (61)
+  // 5. TAE (61)
   PADRON_TAE.forEach((t, idx) => {
     all.push({
       id: `tae-${t.id}`,
@@ -148,12 +168,12 @@ function generateInitialVotantes(): Votante[] {
       nombre: t.nombre,
       dni: t.dni,
       nroEmpl: t.nroEmpl,
-      postura: getInitialPostura(1034 + idx),
+      postura: getInitialPostura(1060 + idx),
       yaVoto: false,
     });
   });
 
-  // 5. Graduados (100)
+  // 6. Graduados (100)
   PADRON_GRADUADOS.forEach((g, idx) => {
     all.push({
       id: `grad-${g.id}`,
@@ -162,21 +182,7 @@ function generateInitialVotantes(): Votante[] {
       subclaustro: g.subclaustro,
       nombre: g.nombre,
       dni: g.dni,
-      postura: getInitialPostura(1095 + idx),
-      yaVoto: false,
-    });
-  });
-
-  // 6. Orquestas (26)
-  PADRON_ORQUESTAS.forEach((o, idx) => {
-    all.push({
-      id: `orq-${o.id}`,
-      nro: o.id,
-      categoria: 'orquesta',
-      subclaustro: o.subclaustro,
-      nombre: o.nombre,
-      dni: o.dni,
-      postura: getInitialPostura(1195 + idx),
+      postura: getInitialPostura(1121 + idx),
       yaVoto: false,
     });
   });
@@ -316,7 +322,6 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (v.categoria === 'docente') threshold = 0.68;
       else if (v.categoria === 'tae') threshold = 0.78;
       else if (v.categoria === 'graduado') threshold = 0.50;
-      else if (v.categoria === 'orquesta') threshold = 0.65;
 
       const willVote = ((i * 13 + 7) % 100) / 100 < threshold;
       const hora = horas[(i * 3) % horas.length];

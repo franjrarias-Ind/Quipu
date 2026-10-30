@@ -7,7 +7,7 @@
       "properties": {
         "categoria": {
           "type": "string",
-          "enum": ["docente", "estudiante", "tae", "graduado", "orquesta"]
+          "enum": ["docente", "estudiante", "tae", "graduado"]
         },
         "votantes": {
           "type": "array",

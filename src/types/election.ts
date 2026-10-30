@@ -7,8 +7,7 @@ export type ClaustroCategoria =
   | 'docente'
   | 'estudiante'
   | 'tae'
-  | 'graduado'
-  | 'orquesta';
+  | 'graduado';
 
 export type Postura = 'Quipu' | 'No sabe' | 'Copla';
 

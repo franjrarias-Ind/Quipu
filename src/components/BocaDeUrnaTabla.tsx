@@ -59,7 +59,6 @@ export const BocaDeUrnaTabla: React.FC = () => {
     { key: 'estudiante', label: 'Estudiantes', badge: '35%' },
     { key: 'tae', label: 'Personal TAE', badge: '15%' },
     { key: 'graduado', label: 'Graduados', badge: '15%' },
-    { key: 'orquesta', label: 'Orquestas', badge: '26' },
   ];
 
   const getPosturaStyle = (p: Postura) => {

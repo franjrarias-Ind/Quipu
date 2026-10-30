@@ -36,8 +36,6 @@ export const DashboardPonderado: React.FC = () => {
         return <Users className="w-4 h-4 text-emerald-400" />;
       case 'graduado':
         return <Award className="w-4 h-4 text-purple-400" />;
-      case 'orquesta':
-        return <Music className="w-4 h-4 text-rose-400" />;
     }
   };
 
@@ -51,8 +49,6 @@ export const DashboardPonderado: React.FC = () => {
         return { label: '15% peso', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
       case 'graduado':
         return { label: '15% peso', color: 'bg-purple-500/10 text-purple-400 border-purple-500/30' };
-      case 'orquesta':
-        return { label: 'Orquesta', color: 'bg-rose-500/10 text-rose-400 border-rose-500/30' };
     }
   };
 
@@ -61,7 +57,6 @@ export const DashboardPonderado: React.FC = () => {
     'estudiante',
     'tae',
     'graduado',
-    'orquesta',
   ];
 
   const pctNuestra =
@@ -89,7 +84,7 @@ export const DashboardPonderado: React.FC = () => {
             <p className="text-xs text-slate-400 mt-0.5">
               {modoVistaTendencia === 'estatutaria'
                 ? 'Ponderación estatutaria: 35% Docentes · 35% Estudiantes · 15% TAE · 15% Graduados'
-                : 'Conteo directo sumando todos los padrones (Docentes, FoBaM, Estudiantes, TAE, Graduados, Orquestas)'}
+                : 'Conteo directo sumando todos los padrones (Docentes, Estudiantes, TAE, Graduados)'}
             </p>
           </div>
 
@@ -186,8 +181,8 @@ export const DashboardPonderado: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Tarjetas de los 5 Claustros y Padrones */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* 2. Tarjetas de los 4 Claustros y Padrones */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {categorias.map(cat => {
           const c = resumen.porClaustro[cat];
           const isSelected = categoriaActiva === cat;
