@@ -5,13 +5,12 @@
 
 export type ClaustroCategoria =
   | 'docente'
-  | 'docente_fobam'
   | 'estudiante'
   | 'tae'
   | 'graduado'
   | 'orquesta';
 
-export type Postura = 'Quipu' | 'Indecisos' | 'Copla';
+export type Postura = 'Quipu' | 'No sabe' | 'Copla';
 
 export interface Votante {
   id: string; // e.g. "doc-1", "fobam-12", "orq-4"

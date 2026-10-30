@@ -37,20 +37,32 @@ interface ElectionContextType {
   cloudSyncStatus: 'conectado' | 'guardando' | 'offline';
 }
 
-const STORAGE_KEY = 'esmn_boca_urna_ponderada_v10';
+const STORAGE_KEY = 'esmn_boca_urna_ponderada_v11';
 
 export function normalizePostura(raw: any): Postura {
-  if (typeof raw !== 'string') return 'Indecisos';
+  if (typeof raw !== 'string') return 'No sabe';
   const s = raw.trim().toLowerCase();
   if (s.includes('quipu') || s.includes('favor') || s === 'nuestra') return 'Quipu';
   if (s.includes('copla') || s.includes('contra')) return 'Copla';
-  return 'Indecisos';
+  return 'No sabe';
+}
+
+export function normalizeVotante(v: any): Votante {
+  const cat: ClaustroCategoria =
+    v.categoria === 'docente_fobam' ? 'docente' : (v.categoria as ClaustroCategoria);
+  const sub =
+    v.categoria === 'docente_fobam' ? (v.subclaustro || 'FoBaM') : v.subclaustro;
+  return {
+    ...v,
+    categoria: cat,
+    subclaustro: sub,
+    postura: normalizePostura(v.postura),
+  };
 }
 
 // Statutory weights (35% Docentes, 35% Estudiantes, 15% TAE, 15% Graduados)
 const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
   docente: 0.35,
-  docente_fobam: 0,
   estudiante: 0.35,
   tae: 0.15,
   graduado: 0.15,
@@ -59,7 +71,6 @@ const PESOS_ESTATUTARIOS: Record<ClaustroCategoria, number> = {
 
 const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
   docente: 'Docentes',
-  docente_fobam: 'Docentes FoBaM',
   estudiante: 'Estudiantes',
   tae: 'Personal TAE',
   graduado: 'Graduados',
@@ -68,7 +79,6 @@ const NOMBRES_CLAUSTRO: Record<ClaustroCategoria, string> = {
 
 const ALL_CATEGORIAS: ClaustroCategoria[] = [
   'docente',
-  'docente_fobam',
   'estudiante',
   'tae',
   'graduado',
@@ -79,37 +89,38 @@ function generateInitialVotantes(): Votante[] {
   const all: Votante[] = [];
 
   // Realistic seed distribution
-  const getInitialPostura = (index: number, cat: ClaustroCategoria): Postura => {
-    const mod = (index * 11 + (cat === 'docente' ? 3 : cat === 'docente_fobam' ? 7 : cat === 'tae' ? 1 : 5)) % 100;
+  const getInitialPostura = (index: number): Postura => {
+    const mod = (index * 11 + 3) % 100;
     if (mod < 48) return 'Quipu';
-    if (mod < 76) return 'Indecisos';
+    if (mod < 76) return 'No sabe';
     return 'Copla';
   };
 
-  // 1. Docentes (284)
+  // 1. Docentes ESMN (284)
   PADRON_DOCENTES.forEach((d, idx) => {
     all.push({
       id: `doc-${d.id}`,
       nro: d.id,
       categoria: 'docente',
+      subclaustro: 'Docentes',
       nombre: d.nombre,
       dni: d.dni,
       nroEmpl: d.nroEmpl,
-      postura: getInitialPostura(idx, 'docente'),
+      postura: getInitialPostura(idx),
       yaVoto: false,
     });
   });
 
-  // 2. Docentes FoBaM (238)
+  // 2. Docentes FoBaM (238) - Juntos en el único ítem "Docentes"
   PADRON_DOCENTES_FOBAM.forEach((f, idx) => {
     all.push({
       id: `fobam-${f.id}`,
-      nro: f.id,
-      categoria: 'docente_fobam',
-      subclaustro: f.subclaustro,
+      nro: 284 + f.id,
+      categoria: 'docente',
+      subclaustro: 'FoBaM',
       nombre: f.nombre,
       dni: f.dni,
-      postura: getInitialPostura(idx, 'docente_fobam'),
+      postura: getInitialPostura(284 + idx),
       yaVoto: false,
     });
   });
@@ -123,7 +134,7 @@ function generateInitialVotantes(): Votante[] {
       subclaustro: e.subclaustro,
       nombre: e.nombre,
       dni: e.dni,
-      postura: getInitialPostura(idx, 'estudiante'),
+      postura: getInitialPostura(522 + idx),
       yaVoto: false,
     });
   });
@@ -137,7 +148,7 @@ function generateInitialVotantes(): Votante[] {
       nombre: t.nombre,
       dni: t.dni,
       nroEmpl: t.nroEmpl,
-      postura: getInitialPostura(idx, 'tae'),
+      postura: getInitialPostura(1034 + idx),
       yaVoto: false,
     });
   });
@@ -151,7 +162,7 @@ function generateInitialVotantes(): Votante[] {
       subclaustro: g.subclaustro,
       nombre: g.nombre,
       dni: g.dni,
-      postura: getInitialPostura(idx, 'graduado'),
+      postura: getInitialPostura(1095 + idx),
       yaVoto: false,
     });
   });
@@ -165,7 +176,7 @@ function generateInitialVotantes(): Votante[] {
       subclaustro: o.subclaustro,
       nombre: o.nombre,
       dni: o.dni,
-      postura: getInitialPostura(idx, 'orquesta'),
+      postura: getInitialPostura(1195 + idx),
       yaVoto: false,
     });
   });
@@ -184,15 +195,12 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const saved =
         localStorage.getItem(STORAGE_KEY) ||
-        localStorage.getItem('esmn_boca_urna_ponderada_v9') ||
-        localStorage.getItem('esmn_boca_urna_ponderada_v8');
+        localStorage.getItem('esmn_boca_urna_ponderada_v10') ||
+        localStorage.getItem('esmn_boca_urna_ponderada_v9');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 1000) {
-          return parsed.map((v: any) => ({
-            ...v,
-            postura: normalizePostura(v.postura),
-          }));
+          return parsed.map(normalizeVotante);
         }
       }
     } catch {
@@ -221,10 +229,8 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const data = docSnap.data();
             if (data && Array.isArray(data.votantes)) {
               data.votantes.forEach((v: any) => {
-                remoteMap.set(v.id, {
-                  ...v,
-                  postura: normalizePostura(v.postura),
-                });
+                const norm = normalizeVotante(v);
+                remoteMap.set(norm.id, norm);
               });
             }
           });
@@ -308,7 +314,6 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const actualizados = votantes.map((v, i) => {
       let threshold = 0.52;
       if (v.categoria === 'docente') threshold = 0.68;
-      else if (v.categoria === 'docente_fobam') threshold = 0.55;
       else if (v.categoria === 'tae') threshold = 0.78;
       else if (v.categoria === 'graduado') threshold = 0.50;
       else if (v.categoria === 'orquesta') threshold = 0.65;
@@ -384,7 +389,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           case 'Copla':
             scoreLaCopla += 1.0;
             break;
-          case 'Indecisos':
+          case 'No sabe':
           default:
             scoreNuestra += 0.50;
             scoreLaCopla += 0.50;

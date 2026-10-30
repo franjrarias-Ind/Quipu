@@ -56,7 +56,6 @@ export const BocaDeUrnaTabla: React.FC = () => {
 
   const categorias: { key: ClaustroCategoria; label: string; badge: string }[] = [
     { key: 'docente', label: 'Docentes', badge: '35%' },
-    { key: 'docente_fobam', label: 'Docentes FoBaM', badge: '238' },
     { key: 'estudiante', label: 'Estudiantes', badge: '35%' },
     { key: 'tae', label: 'Personal TAE', badge: '15%' },
     { key: 'graduado', label: 'Graduados', badge: '15%' },
@@ -69,7 +68,7 @@ export const BocaDeUrnaTabla: React.FC = () => {
         return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold';
       case 'Copla':
         return 'bg-rose-500/15 text-rose-400 border-rose-500/40 font-bold';
-      case 'Indecisos':
+      case 'No sabe':
       default:
         return 'bg-amber-500/10 text-amber-300 border-amber-500/30 font-medium';
     }
@@ -197,7 +196,7 @@ export const BocaDeUrnaTabla: React.FC = () => {
           >
             <option value="todos">Todas las posturas</option>
             <option value="Quipu">Quipu</option>
-            <option value="Indecisos">Indecisos</option>
+            <option value="No sabe">No sabe</option>
             <option value="Copla">Copla</option>
           </select>
         </div>
@@ -271,7 +270,7 @@ export const BocaDeUrnaTabla: React.FC = () => {
                       )}`}
                     >
                       <option value="Quipu" className="bg-slate-900 text-emerald-400 font-semibold">Quipu</option>
-                      <option value="Indecisos" className="bg-slate-900 text-amber-300 font-medium">Indecisos</option>
+                      <option value="No sabe" className="bg-slate-900 text-amber-300 font-medium">No sabe</option>
                       <option value="Copla" className="bg-slate-900 text-rose-400 font-bold">Copla</option>
                     </select>
                   </td>

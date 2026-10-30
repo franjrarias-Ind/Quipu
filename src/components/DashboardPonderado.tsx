@@ -30,8 +30,6 @@ export const DashboardPonderado: React.FC = () => {
     switch (cat) {
       case 'docente':
         return <Briefcase className="w-4 h-4 text-amber-400" />;
-      case 'docente_fobam':
-        return <BookOpen className="w-4 h-4 text-orange-400" />;
       case 'estudiante':
         return <GraduationCap className="w-4 h-4 text-blue-400" />;
       case 'tae':
@@ -47,8 +45,6 @@ export const DashboardPonderado: React.FC = () => {
     switch (cat) {
       case 'docente':
         return { label: '35% peso', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
-      case 'docente_fobam':
-        return { label: 'FoBaM', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30' };
       case 'estudiante':
         return { label: '35% peso', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' };
       case 'tae':
@@ -62,7 +58,6 @@ export const DashboardPonderado: React.FC = () => {
 
   const categorias: ClaustroCategoria[] = [
     'docente',
-    'docente_fobam',
     'estudiante',
     'tae',
     'graduado',
@@ -191,8 +186,8 @@ export const DashboardPonderado: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Tarjetas de los 6 Claustros y Padrones */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 2. Tarjetas de los 5 Claustros y Padrones */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {categorias.map(cat => {
           const c = resumen.porClaustro[cat];
           const isSelected = categoriaActiva === cat;
