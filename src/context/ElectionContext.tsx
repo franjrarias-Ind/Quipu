@@ -261,9 +261,12 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const sincronizarCategoriaEnNube = useCallback(async (cat: ClaustroCategoria, catVoters: Votante[]) => {
     setCloudSyncStatus('guardando');
     try {
+      // Sanitización: elimina campos undefined (como horaVoto) incompatibles con Firestore
+      const safeVoters = JSON.parse(JSON.stringify(catVoters));
+
       await setDoc(doc(db, 'claustros', cat), {
         categoria: cat,
-        votantes: catVoters,
+        votantes: safeVoters,
         updatedAt: new Date().toISOString(),
       });
       setCloudSyncStatus('conectado');
